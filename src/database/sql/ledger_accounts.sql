@@ -9,7 +9,7 @@ CREATE TABLE
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
   );
 
--- Seed internal system accounts
+
 INSERT INTO
   ledger_accounts (name, type, description)
 VALUES
