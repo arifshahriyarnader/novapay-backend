@@ -86,6 +86,77 @@ These must exist before any transaction runs. The double-entry ledger writes to 
 ### Why bcrypt with cost factor 10?
 Cost factor 10 is the industry standard balance between security and performance. It produces a hash in ~100ms — slow enough to resist brute force, fast enough for a login endpoint.
 
+## 4. Architecture — Modular Monolith over Microservices
+ 
+I chose a modular monolith over a distributed microservice architecture.
+ 
+**What this means:**
+- One Express application, one server, one deployment
+- Six isolated modules: `auth`, `account`, `transaction`, `ledger`, `fx`, `payroll`, `admin`
+- Each module has its own routes, controllers, services, and validators
+- One PostgreSQL database with logically separated tables per domain
+ 
+**Why not microservices?**
+I have not worked with microservices before. Attempting to build six separate services with inter-service HTTP calls, service discovery, and distributed tracing for the first time under a 2-day deadline would result in a broken, incomplete system. That would be worse than a well-built modular monolith.
+ 
+A modular monolith with clear boundaries is the honest, correct choice here. The module boundaries I have defined make extraction into true microservices straightforward when that scale is needed.
+ 
+**Trade-off accepted:**
+Cannot scale individual modules independently. If the FX module receives 10x traffic, the entire application must scale. This is acceptable at this stage.
+ 
+---
+ 
+## 5. Auth — Access Token Only, No Refresh Token
+ 
+I chose to use only a JWT access token. There is no refresh token.
+ 
+**Why no refresh token?**
+The assessment does not require a refresh token. Refresh tokens add significant complexity:
+- Refresh token storage in database or Redis
+- Token rotation logic
+- Revocation mechanism
+- Two separate endpoints (`/auth/refresh`, `/auth/logout`)
+ 
+This complexity is not justified for an assessment focused on financial transaction correctness. The access token expires in 15 minutes — short enough to be secure, long enough to test all API endpoints via Postman.
+ 
+**What I would add before production:**
+Refresh tokens stored in an httpOnly cookie with a 7-day expiry, token rotation on every refresh, and a token blacklist in Redis for logout.
+ 
+---
+ 
+## 6. Brute Force Protection on Login
+ 
+The login endpoint is protected with a strict rate limiter — maximum 5 attempts per 15 minutes per IP address.
+ 
+**Why is this critical for a payment system?**
+Without brute force protection, an attacker can write a script to try thousands of password combinations against any email address. If they succeed, they have full access to that user's wallet and can initiate transfers immediately.
+ 
+5 attempts per 15 minutes is the industry standard for financial applications. A legitimate user who forgets their password will not exceed 5 attempts. A bot trying thousands of passwords will be blocked immediately.
+ 
+**What happens after 5 failed attempts:**
+The IP is blocked for 15 minutes. The response is:
+```
+429 Too Many Requests
+"Too many login attempts. Please try again after 15 minutes."
+```
+ 
+---
+ 
+## 7. General API Rate Limiter
+ 
+All API endpoints are protected with a general rate limiter — maximum 100 requests per minute per IP address.
+ 
+**Why is this necessary?**
+The NovaPay incident happened partly because the database was overwhelmed by concurrent requests. A rate limiter is the first line of defense against:
+- DDoS attacks (bot sending thousands of requests per second)
+- Accidental overload (client bug sending requests in a tight loop)
+- Database CPU spike (too many concurrent queries)
+ 
+100 requests per minute is generous enough for any legitimate use case — a user interacting with the app will never come close to this limit. A bot or misconfigured client will be blocked before it can cause damage.
+ 
+**Where it is applied:**
+`app.use('/api', apiRateLimiter)` in `server.ts` — before all routes, so every API endpoint is protected without having to add it individually.
+ 
 ---
 
 *More decisions will be added as each feature is implemented.*
