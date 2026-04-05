@@ -4,7 +4,7 @@ import helmet from "helmet";
 import { appConfig } from "./config";
 import { connectDatabase } from "./database";
 import apiRoutes from "./apiRoutes";
-import { errorHandler } from "./middleware/errorHandler";
+import { errorHandler, apiRateLimiter } from "./middleware";
 
 const app = express();
 
@@ -14,10 +14,11 @@ app.use(express.json());
 
 connectDatabase();
 
-app.use("/api/v1", apiRoutes)
+app.use("/api/v1", apiRateLimiter);
+app.use("/api/v1", apiRoutes);
 
-app.use(errorHandler)
+app.use(errorHandler);
 
 app.listen(appConfig.port, () => {
-    console.log(`Server is running on port ${appConfig.port}`);
-})
+  console.log(`Server is running on port ${appConfig.port}`);
+});
