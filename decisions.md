@@ -156,7 +156,98 @@ The NovaPay incident happened partly because the database was overwhelmed by con
  
 **Where it is applied:**
 `app.use('/api', apiRateLimiter)` in `server.ts` — before all routes, so every API endpoint is protected without having to add it individually.
+
+---
  
+## 8. Utility Layer — ApiError, ApiResponse, AsyncHandler
+ 
+### ApiError
+A custom error class that extends the native `Error` object with a `statusCode` property.
+ 
+**Why not use plain `throw new Error()`?**
+ 
+Plain errors have no HTTP status code. Without `ApiError`, every controller would need its own `if/else` to decide whether to return 400, 401, 403, 404, or 500. With `ApiError`, the error carries its own status code and the global `errorHandler` middleware reads it automatically.
+ 
+```typescript
+// Without ApiError — repeated everywhere
+if (!user) {
+  return res.status(404).json({ message: 'Not found' });
+}
+ 
+// With ApiError — clean, reusable
+if (!user) throw new ApiError(404, 'User not found');
+```
+ 
+### ApiResponse
+A single function that produces a consistent response shape across all endpoints.
+ 
+**Why?**
+Every endpoint returning a different structure makes the Postman collection unpredictable and the frontend integration fragile. One function enforces:
+```json
+{
+  "success": true,
+  "message": "...",
+  "data": {}
+}
+```
+ 
+### AsyncHandler
+A wrapper that catches errors from async controller functions and passes them to the global `errorHandler` via `next()`.
+ 
+**Why?**
+Express does not automatically catch errors thrown inside async functions. Without `asyncHandler`, every controller needs a `try/catch` block. With it, controllers stay clean and error handling is centralized.
+ 
+```typescript
+// Without asyncHandler — repeated try/catch everywhere
+router.get('/', async (req, res, next) => {
+  try {
+    const data = await someService();
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+ 
+// With asyncHandler — clean
+router.get('/', asyncHandler(async (req, res) => {
+  const data = await someService();
+  res.json(data);
+}));
+```
+ 
+---
+ 
+## 9. Modular Architecture — Why Feature-Based Modules
+ 
+Each feature (auth, account, transaction, ledger, fx, payroll, admin) is isolated in its own folder with its own routes, controller, service, validator, and types.
+ 
+**Why this structure?**
+- Each module can be understood, tested, and modified independently
+- No cross-module imports except through defined interfaces
+- Follows the same pattern used in the RBAC system — proven and comfortable
+- Makes it straightforward to extract a module into a microservice later
+ 
+---
+ 
+## 10. Seed — 50 Employees
+ 
+50 employee users (`employee1@novapay.com` through `employee50@novapay.com`) are seeded with corresponding USD accounts.
+ 
+**Why 50 employees?**
+ 
+The core requirement is bulk payroll processing via BullMQ queue. With only 1 receiver (`receiver@novapay.com`), a payroll job would have 1 recipient — this does not demonstrate the queue behavior, concurrency control, or progress tracking that the assessment requires.
+ 
+50 employees allows:
+- A realistic payroll job with 50 recipients
+- BullMQ queue processing items one at a time (concurrency = 1)
+- Progress tracking (`processed_count` vs `total_recipients`)
+- Idempotency per payroll item — each employee credit has its own key
+- Demonstrating that a crash mid-payroll does not duplicate any credit
+ 
+**Why seeded instead of registered?**
+Registering 50 accounts via API during assessment review is impractical. Seeding them ensures the reviewer can run `npm run seed` once and immediately test payroll with realistic data.
+ 
+
 ---
 
 *More decisions will be added as each feature is implemented.*
