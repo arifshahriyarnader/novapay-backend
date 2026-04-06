@@ -197,3 +197,28 @@ export const getTransactionService = async (
     ledgerEntries: ledger.rows,
   };
 };
+
+export const getTransactionHistoryService = async (userId: string) => {
+  const result = await databasePool.query(
+    `SELECT t.id, t.amount, t.currency, t.status, t.type,
+            t.sender_account_id, t.receiver_account_id,
+            t.created_at
+     FROM transactions t
+     JOIN accounts a ON a.id = t.sender_account_id
+     WHERE a.user_id = $1
+     ORDER BY t.created_at DESC
+     LIMIT 50`,
+    [userId],
+  );
+
+  return result.rows.map((t) => ({
+    id: t.id,
+    amount: t.amount,
+    currency: t.currency,
+    status: t.status,
+    type: t.type,
+    senderAccountId: t.sender_account_id,
+    receiverAccountId: t.receiver_account_id,
+    createdAt: t.created_at,
+  }));
+};
