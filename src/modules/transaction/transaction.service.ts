@@ -222,3 +222,95 @@ export const getTransactionHistoryService = async (userId: string) => {
     createdAt: t.created_at,
   }));
 };
+
+export const reverseTransactionService = async (
+  transactionId: string,
+  userId: string,
+) => {
+  const txResult = await databasePool.query(
+    `SELECT t.*, sender.user_id as sender_user_id
+     FROM transactions t
+     JOIN accounts sender ON sender.id = t.sender_account_id
+     WHERE t.id = $1`,
+    [transactionId],
+  );
+
+  const transaction = txResult.rows[0];
+
+  if (!transaction) throw new ApiError(404, "Transaction not found");
+  if (transaction.sender_user_id !== userId)
+    throw new ApiError(403, "You do not have access to this transaction");
+  if (transaction.status !== "completed")
+    throw new ApiError(400, "Only completed transactions can be reversed");
+
+  const client = await databasePool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const receiverBalance = await client.query(
+      `SELECT balance FROM accounts
+       WHERE id = $1 FOR UPDATE`,
+      [transaction.receiver_account_id],
+    );
+
+    if (
+      parseFloat(receiverBalance.rows[0].balance) <
+      parseFloat(transaction.amount)
+    ) {
+      await client.query("ROLLBACK");
+      throw new ApiError(
+        400,
+        "Receiver has insufficient balance to reverse this transaction",
+      );
+    }
+
+    await client.query(
+      `UPDATE accounts SET balance = balance - $1, updated_at = NOW()
+       WHERE id = $2`,
+      [transaction.amount, transaction.receiver_account_id],
+    );
+
+    await client.query(
+      `UPDATE accounts SET balance = balance + $1, updated_at = NOW()
+       WHERE id = $2`,
+      [transaction.amount, transaction.sender_account_id],
+    );
+
+    await client.query(
+      `UPDATE transactions SET status = 'reversed', updated_at = NOW()
+       WHERE id = $1`,
+      [transactionId],
+    );
+
+    await client.query(
+      `INSERT INTO ledger_entries
+         (transaction_id, account_id, type, amount, currency)
+       VALUES
+         ($1, $2, 'debit',  $3, $4),
+         ($1, $5, 'credit', $3, $4)`,
+      [
+        transactionId,
+        transaction.receiver_account_id,
+        transaction.amount,
+        transaction.currency,
+        transaction.sender_account_id,
+      ],
+    );
+
+    await client.query("COMMIT");
+
+    return {
+      transactionId,
+      status: "reversed",
+      amount: transaction.amount,
+      currency: transaction.currency,
+      message: "Transaction reversed successfully",
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};

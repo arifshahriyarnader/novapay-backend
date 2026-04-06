@@ -5,6 +5,7 @@ import { AuthRequest } from "../../middleware";
 import {
   getTransactionHistoryService,
   getTransactionService,
+  reverseTransactionService,
   transferService,
 } from "./transaction.service";
 import { TransferInput } from "./transaction.validator";
@@ -38,4 +39,13 @@ export const getTransactionHistory = asyncHandler(
       result,
     );
   },
+);
+
+export const reverseTransaction = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const id = req.params['id'] as string;
+    const result = await reverseTransactionService(id, userId);
+    return apiResponse(res, 200, 'Transaction reversed successfully', result);
+  }
 );

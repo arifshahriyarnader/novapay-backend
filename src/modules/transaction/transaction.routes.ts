@@ -2,9 +2,9 @@ import { Router } from "express";
 import {
   getTransaction,
   getTransactionHistory,
+  reverseTransaction,
   transfer,
 } from "./transaction.controller";
-
 import { authenticate, authorize, validate } from "../../middleware";
 import { transferSchema } from "./transaction.validator";
 
@@ -25,5 +25,11 @@ router.get(
 );
 router.get("/:id", authenticate, authorize("user", "employer"), getTransaction);
 
+router.post(
+  "/:id/reverse",
+  authenticate,
+  authorize("user", "employer"),
+  reverseTransaction,
+);
 
 export default router;
