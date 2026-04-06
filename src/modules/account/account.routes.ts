@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAccount, getMyAccounts } from "./account.controller";
+import { createAccount, getAccountBalance, getMyAccounts } from "./account.controller";
 import { authenticate, authorize, validate } from "../../middleware";
 import { createAccountSchema } from "./account.validator";
 
@@ -18,6 +18,13 @@ router.get(
   authenticate,
   authorize('user', 'employer'),
   getMyAccounts
+);
+
+router.get(
+  '/:id/balance',
+  authenticate,
+  authorize('user', 'employer'),
+  getAccountBalance
 );
 
 export default router;

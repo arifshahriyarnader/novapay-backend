@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { asyncHandler, apiResponse } from "../../utils";
 import { AuthRequest } from "../../middleware";
-import { createAccountService, getMyAccountsService } from "./account.service";
+import { createAccountService, getAccountBalanceService, getMyAccountsService } from "./account.service";
 import { CreateAccountInput } from "./account.validator";
 
 export const createAccount = asyncHandler(
@@ -20,5 +20,14 @@ export const getMyAccounts = asyncHandler(
     const userId = req.user!.userId;
     const accounts = await getMyAccountsService(userId);
     return apiResponse(res, 200, 'Accounts fetched successfully', accounts);
+  }
+);
+
+export const getAccountBalance = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const id = req.params['id'] as string;
+    const balance = await getAccountBalanceService(id, userId);
+    return apiResponse(res, 200, 'Balance fetched successfully', balance);
   }
 );

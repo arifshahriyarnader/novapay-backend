@@ -117,3 +117,33 @@ export const getMyAccountsService = async (userId: string) => {
     createdAt: account.created_at,
   }));
 };
+
+export const getAccountBalanceService = async (
+  accountId: string,
+  userId: string
+) => {
+  const result = await databasePool.query(
+    `SELECT id, user_id, currency, balance, is_active
+     FROM accounts
+     WHERE id = $1 AND is_active = TRUE`,
+    [accountId]
+  );
+ 
+  const account = result.rows[0];
+ 
+  if (!account) {
+    throw new ApiError(404, 'Account not found');
+  }
+ 
+  
+  if (account.user_id !== userId) {
+    throw new ApiError(403, 'You do not have access to this account');
+  }
+ 
+  return {
+    id: account.id,
+    currency: account.currency,
+    balance: account.balance,
+    isActive: account.is_active,
+  };
+};
