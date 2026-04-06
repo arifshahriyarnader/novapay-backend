@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { databasePool } from "../../database/connection";
 import { ApiError } from "../../utils/ApiError";
-import { CreateAccountInput } from "./account.validator";
+import { CreateAccountInput, DepositInput } from "./account.validator";
 
 const MASTER_KEY = process.env.MASTER_ENCRYPTION_KEY ?? "";
 
@@ -105,9 +105,9 @@ export const getMyAccountsService = async (userId: string) => {
      FROM accounts
      WHERE user_id = $1 AND is_active = TRUE
      ORDER BY created_at ASC`,
-    [userId]
+    [userId],
   );
- 
+
   return result.rows.map((account) => ({
     id: account.id,
     userId: account.user_id,
@@ -120,30 +120,63 @@ export const getMyAccountsService = async (userId: string) => {
 
 export const getAccountBalanceService = async (
   accountId: string,
-  userId: string
+  userId: string,
 ) => {
   const result = await databasePool.query(
     `SELECT id, user_id, currency, balance, is_active
      FROM accounts
      WHERE id = $1 AND is_active = TRUE`,
-    [accountId]
+    [accountId],
   );
- 
+
   const account = result.rows[0];
- 
+
   if (!account) {
-    throw new ApiError(404, 'Account not found');
+    throw new ApiError(404, "Account not found");
   }
- 
-  
+
   if (account.user_id !== userId) {
-    throw new ApiError(403, 'You do not have access to this account');
+    throw new ApiError(403, "You do not have access to this account");
   }
- 
+
   return {
     id: account.id,
     currency: account.currency,
     balance: account.balance,
     isActive: account.is_active,
+  };
+};
+
+export const depositService = async (userId: string, input: DepositInput) => {
+  const accountResult = await databasePool.query(
+    `SELECT id, user_id, currency, balance
+     FROM accounts
+     WHERE id = $1 AND is_active = TRUE`,
+    [input.accountId],
+  );
+
+  const account = accountResult.rows[0];
+
+  if (!account) {
+    throw new ApiError(404, "Account not found");
+  }
+
+  if (account.user_id !== userId) {
+    throw new ApiError(403, "You do not have access to this account");
+  }
+
+  const updated = await databasePool.query(
+    `UPDATE accounts
+     SET balance = balance + $1, updated_at = NOW()
+     WHERE id = $2
+     RETURNING id, currency, balance`,
+    [input.amount, input.accountId],
+  );
+
+  return {
+    id: updated.rows[0].id,
+    currency: updated.rows[0].currency,
+    balance: updated.rows[0].balance,
+    deposited: input.amount,
   };
 };

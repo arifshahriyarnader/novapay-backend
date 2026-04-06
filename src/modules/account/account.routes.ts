@@ -1,7 +1,12 @@
 import { Router } from "express";
-import { createAccount, getAccountBalance, getMyAccounts } from "./account.controller";
+import {
+  createAccount,
+  deposit,
+  getAccountBalance,
+  getMyAccounts,
+} from "./account.controller";
 import { authenticate, authorize, validate } from "../../middleware";
-import { createAccountSchema } from "./account.validator";
+import { createAccountSchema, depositSchema } from "./account.validator";
 
 const router = Router();
 
@@ -14,17 +19,25 @@ router.post(
 );
 
 router.get(
-  '/my-wallets',
+  "/my-wallets",
   authenticate,
-  authorize('user', 'employer'),
-  getMyAccounts
+  authorize("user", "employer"),
+  getMyAccounts,
 );
 
 router.get(
-  '/:id/balance',
+  "/:id/balance",
   authenticate,
-  authorize('user', 'employer'),
-  getAccountBalance
+  authorize("user", "employer"),
+  getAccountBalance,
+);
+
+router.post(
+  "/deposit",
+  authenticate,
+  authorize("user", "employer"),
+  validate(depositSchema),
+  deposit,
 );
 
 export default router;
