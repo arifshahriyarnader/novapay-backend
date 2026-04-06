@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
-import { asyncHandler } from "../../utils/asyncHandler";
-import { apiResponse } from "../../utils/apiResponse";
+import { apiResponse, asyncHandler } from "../../utils";
 import { loginService } from "./auth.service";
 import { LoginInput } from "./auth.validator";
 

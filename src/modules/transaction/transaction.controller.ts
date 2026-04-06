@@ -1,6 +1,5 @@
 import { Response } from "express";
-import { asyncHandler } from "../../utils/asyncHandler";
-import { apiResponse } from "../../utils/apiResponse";
+import { apiResponse, asyncHandler } from "../../utils";
 import { AuthRequest } from "../../middleware";
 import {
   getTransactionHistoryService,
