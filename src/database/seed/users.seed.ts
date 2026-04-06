@@ -4,7 +4,7 @@ import { databasePool } from "../connection";
 export const seedUsers = async () => {
   console.log("Seeding users...");
 
-  const users = [
+  const baseUsers = [
     {
       email: "admin@novapay.com",
       password: "Admin@123",
@@ -26,6 +26,14 @@ export const seedUsers = async () => {
       role: "employer" as const,
     },
   ];
+
+  const employees = Array.from({ length: 50 }, (_, i) => ({
+    email: `employee${i + 1}@novapay.com`,
+    password: 'Employee@123',
+    role: 'user' as const,
+  }));
+ 
+  const users = [...baseUsers, ...employees];
 
   for (const user of users) {
     const existing = await databasePool.query(
