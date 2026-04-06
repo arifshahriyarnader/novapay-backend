@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { transfer } from "./transaction.controller";
+import { getTransaction, transfer } from "./transaction.controller";
 
 import { authenticate, authorize, validate } from "../../middleware";
 import { transferSchema } from "./transaction.validator";
@@ -14,4 +14,10 @@ router.post(
   transfer,
 );
 
+router.get(
+  '/:id',
+  authenticate,
+  authorize('user', 'employer'),
+  getTransaction
+);
 export default router;

@@ -152,3 +152,48 @@ export const transferService = async (userId: string, input: TransferInput) => {
     client.release();
   }
 };
+
+export const getTransactionService = async (
+  transactionId: string,
+  userId: string,
+) => {
+  const result = await databasePool.query(
+    `SELECT t.*, 
+            sender.user_id as sender_user_id
+     FROM transactions t
+     JOIN accounts sender ON sender.id = t.sender_account_id
+     WHERE t.id = $1`,
+    [transactionId],
+  );
+
+  const transaction = result.rows[0];
+
+  if (!transaction) throw new ApiError(404, "Transaction not found");
+
+  if (transaction.sender_user_id !== userId) {
+    throw new ApiError(403, "You do not have access to this transaction");
+  }
+
+  const ledger = await databasePool.query(
+    `SELECT id, account_id, type, amount, currency, created_at
+     FROM ledger_entries
+     WHERE transaction_id = $1
+     ORDER BY type ASC`,
+    [transactionId],
+  );
+
+  return {
+    id: transaction.id,
+    idempotencyKey: transaction.idempotency_key,
+    senderAccountId: transaction.sender_account_id,
+    receiverAccountId: transaction.receiver_account_id,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    status: transaction.status,
+    type: transaction.type,
+    failureReason: transaction.failure_reason,
+    createdAt: transaction.created_at,
+    updatedAt: transaction.updated_at,
+    ledgerEntries: ledger.rows,
+  };
+};
