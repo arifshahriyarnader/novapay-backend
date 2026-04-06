@@ -98,3 +98,22 @@ export const createAccountService = async (
     createdAt: account.created_at,
   };
 };
+
+export const getMyAccountsService = async (userId: string) => {
+  const result = await databasePool.query(
+    `SELECT id, user_id, currency, balance, is_active, created_at
+     FROM accounts
+     WHERE user_id = $1 AND is_active = TRUE
+     ORDER BY created_at ASC`,
+    [userId]
+  );
+ 
+  return result.rows.map((account) => ({
+    id: account.id,
+    userId: account.user_id,
+    currency: account.currency,
+    balance: account.balance,
+    isActive: account.is_active,
+    createdAt: account.created_at,
+  }));
+};

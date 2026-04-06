@@ -52,7 +52,6 @@ export const seedAccounts = async () => {
   console.log(`   Found ${employees.length} employees`);
 
   for (const employee of employees) {
-    // Check if account already exists
     const existing = await databasePool.query(
       `SELECT id FROM accounts
        WHERE user_id = $1 AND currency = 'USD'`,
