@@ -344,5 +344,81 @@ router.get('/:id', getTransaction);
 This same pattern is applied in the ledger routes where `/verify/:transactionId` is defined before `/:accountId`. 
 
 ---
+ 
+## 16. FX Service — Rate Locking Strategy
+ 
+### Why 60-second TTL?
+60 seconds is enough time for a user to review the locked rate and confirm the transfer. It is short enough that rate movement risk is minimal. FX rates typically move less than 0.1% in a 60-second window. Beyond 60 seconds, the user must re-initiate to get a fresh rate — this is intentional, not a limitation.
+ 
+### Single-use enforcement
+The `fx_quotes` table has a `status` column (`active`, `used`, `expired`). When a transfer executes, the quote is atomically marked `used` in the same database transaction as the ledger entries:
+ 
+```sql
+UPDATE fx_quotes
+SET status = 'used'
+WHERE id = $1 AND status = 'active' AND expires_at > NOW()
+RETURNING *;
+```
+ 
+Zero rows returned means the quote was already used or expired between our check and the update. The transfer is rejected immediately. This prevents two concurrent transfers from consuming the same quote.
+ 
+### Why not silently fall back to a cached rate?
+The NovaPay incident was caused by a stale rate applied 45 minutes after it was fetched. A user lost $240 on a $1,200 transfer. Silently falling back to any cached rate — even one that is 1 second old — violates the user's expectation that the rate they confirmed is the rate applied.
+ 
+If the FX provider is unavailable, the system returns:
+```
+503 Service Unavailable:
+"FX provider is currently unavailable. Please try again later.
+We never apply cached rates — your transfer has not been initiated."
+```
+ 
+### FX Provider simulation
+A mock provider (`fx.provider.ts`) simulates live rates with small random fluctuations. The environment variable `FX_PROVIDER_DOWN=true` simulates provider unavailability — used only for testing. It is not set in production `.env`.
+ 
+### Why a separate `fx.provider.ts` file?
+Isolating the external provider call into its own file makes it easy to swap the mock for a real provider (Open Exchange Rates, Fixer.io) without touching the service logic. In production, only `fx.provider.ts` changes.
+ 
+---
+ 
+## 17. Payroll Service — BullMQ Queue vs Database Locking
+ 
+### The problem BullMQ solves
+The NovaPay incident happened because 14,000 concurrent debit requests hit the same employer account simultaneously. The database row lock became a thundering herd — queries queued, timeouts cascaded, CPU hit 100%.
+ 
+### Why not pessimistic locking?
+With 14,000 concurrent debits against the same account, pessimistic locking (`SELECT FOR UPDATE`) creates a queue at the database lock manager. All 14,000 connections hold open transactions waiting for the lock. This exhausts the connection pool and crashes the database — exactly what happened in the incident.
+ 
+### Why not optimistic locking?
+Optimistic locking retries on conflict. With 14,000 workers all retrying against the same row, retry storms amplify database load rather than reduce it. Each retry opens a new transaction, reads the row, fails the version check, and retries again — 14,000 × N retries = exponentially worse than the original problem.
+ 
+### Why BullMQ with concurrency 1?
+```
+BullMQ queue with concurrency = 1 per employer account means:
+→ Exactly one payment processes at a time
+→ No database lock contention
+→ No retry storms
+→ The queue is the serialization mechanism, not the database
+```
+ 
+Each payment job runs sequentially. The employer account is debited once per job, verified with `SELECT FOR UPDATE` inside a proper database transaction. By the time the next job runs, the previous debit is committed and the balance is accurate.
+ 
+### Why is this better for 14,000 payments?
+```
+Database locking: 14,000 connections fight for 1 lock → chaos
+BullMQ queue:     14,000 jobs wait in line → orderly processing
+```
+ 
+Processing time with concurrency 1 is longer but correct. A payroll job is not time-critical to the millisecond — it is critical to be correct.
+ 
+### Idempotency per payroll item
+Each payroll item has its own idempotency key: `payroll-{jobId}-{recipientAccountId}`. If the worker crashes mid-job and restarts, it checks this key before processing. Already-completed items are skipped. No employee is credited twice.
+ 
+### Job resumability
+If the server crashes mid-payroll, the remaining jobs stay in the Redis queue. When the server restarts, the BullMQ worker picks up where it left off. The `processed_count` and `failed_count` columns track progress — the job does not restart from the beginning.
+ 
+### Why Redis for the queue?
+BullMQ requires Redis as its queue storage backend. Redis stores job metadata (status, attempts, data) with high throughput and low latency. PostgreSQL stores the financial transaction data — Redis only stores the queue state. This separation keeps the database free for financial queries.
+ 
+---
 
 *More decisions will be added as each feature is implemented.*
