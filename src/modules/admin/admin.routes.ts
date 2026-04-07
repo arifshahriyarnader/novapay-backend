@@ -4,6 +4,7 @@ import {
   getAllTransactions,
   getAllUsers,
   getAuditLogs,
+  getLedgerHealth,
 } from "./admin.controller";
 
 const router = Router();
@@ -19,4 +20,5 @@ router.get(
   getAllTransactions,
 );
 
+router.get("/ledger/health", authenticate, authorize("admin"), getLedgerHealth);
 export default router;

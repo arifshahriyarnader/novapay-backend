@@ -4,6 +4,7 @@ import {
   getAllTransactionsService,
   getAllUsersService,
   getAuditLogsService,
+  getLedgerHealthService,
 } from "./admin.service";
 import { AuthRequest } from "../../middleware";
 
@@ -27,5 +28,17 @@ export const getAllTransactions = asyncHandler(
   async (_req: AuthRequest, res: Response) => {
     const result = await getAllTransactionsService();
     return apiResponse(res, 200, "Transactions fetched successfully", result);
+  },
+);
+
+export const getLedgerHealth = asyncHandler(
+  async (_req: AuthRequest, res: Response) => {
+    const result = await getLedgerHealthService();
+    return apiResponse(
+      res,
+      result.isHealthy ? 200 : 500,
+      result.message,
+      result,
+    );
   },
 );

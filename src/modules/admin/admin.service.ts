@@ -90,3 +90,44 @@ export const getAllTransactionsService = async () => {
     updatedAt: t.updated_at,
   }));
 };
+
+export const getLedgerHealthService = async () => {
+  const result = await databasePool.query(
+    `SELECT
+       t.id as transaction_id,
+       t.amount,
+       t.currency,
+       t.status,
+       SUM(CASE WHEN le.type = 'credit' THEN le.amount ELSE -le.amount END) AS balance
+     FROM transactions t
+     JOIN ledger_entries le ON le.transaction_id = t.id
+     GROUP BY t.id, t.amount, t.currency, t.status
+     HAVING SUM(CASE WHEN le.type = 'credit' THEN le.amount ELSE -le.amount END) != 0`,
+  );
+
+  const violations = result.rows;
+
+  const totalResult = await databasePool.query(
+    `SELECT COUNT(*) as total FROM transactions`,
+  );
+
+  const totalTransactions = parseInt(totalResult.rows[0].total);
+  const isHealthy = violations.length === 0;
+
+  return {
+    isHealthy,
+    totalTransactions,
+    violationCount: violations.length,
+    violations: violations.map((v) => ({
+      transactionId: v.transaction_id,
+      amount: v.amount,
+      currency: v.currency,
+      status: v.status,
+      invariantBalance: v.balance,
+    })),
+    checkedAt: new Date(),
+    message: isHealthy
+      ? "✅ Ledger is healthy — all transactions satisfy double-entry invariant"
+      : `🚨 CRITICAL: ${violations.length} invariant violation(s) detected — money has been created or destroyed`,
+  };
+};
