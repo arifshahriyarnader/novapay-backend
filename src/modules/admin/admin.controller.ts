@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { apiResponse, asyncHandler } from "../../utils";
-import { getAllUsersService } from "./admin.service";
+import { getAllUsersService, getAuditLogsService } from "./admin.service";
 
 export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
@@ -15,4 +15,10 @@ export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
     totalPages: Math.ceil(result.total / limit),
     data: result.data,
   });
+});
+
+export const getAuditLogs = asyncHandler(async (req: Request, res: Response) => {
+  const logs = await getAuditLogsService();
+
+  return apiResponse(res, 200, "Audit logs fetched successfully", logs);
 });

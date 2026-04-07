@@ -1,5 +1,5 @@
 import { databasePool } from "../../database/connection";
-import { AdminUser } from "./admin.type";
+import { AdminUser, AuditLog } from "./admin.type";
 
 export const getAllUsersService = async (
   page: number,
@@ -21,4 +21,15 @@ export const getAllUsersService = async (
     data: usersResult.rows,
     total: parseInt(countResult.rows[0].count),
   };
+};
+
+export const getAuditLogsService = async (): Promise<AuditLog[]> => {
+  const result = await databasePool.query(
+    `SELECT id, action, user_id, metadata, created_at
+     FROM audit_logs
+     ORDER BY created_at DESC
+     LIMIT 100`
+  );
+
+  return result.rows;
 };
