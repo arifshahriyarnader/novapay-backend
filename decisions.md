@@ -246,7 +246,102 @@ The core requirement is bulk payroll processing via BullMQ queue. With only 1 re
  
 **Why seeded instead of registered?**
 Registering 50 accounts via API during assessment review is impractical. Seeding them ensures the reviewer can run `npm run seed` once and immediately test payroll with realistic data.
+
+---
  
+## 11. Transaction Service — Idempotency (5 Scenarios)
+ 
+Every disbursement request must be processed exactly once regardless of how many times it arrives.
+ 
+**Mechanism:** Every request carries an `idempotencyKey`. On arrival, the key is inserted into the `idempotency_keys` table using `INSERT ... ON CONFLICT DO NOTHING`. PostgreSQL's unique constraint ensures exactly one insert wins atomically.
+ 
+### Scenario A — Same key arrives twice
+The second request finds the key with status `completed` and returns the cached `response` column. No second transaction is created. No second debit occurs.
+ 
+### Scenario B — Three identical requests within 100ms
+All three attempt `INSERT ... ON CONFLICT DO NOTHING` simultaneously. PostgreSQL's unique constraint allows exactly one insert to succeed. The two losing requests receive 0 rows affected — they query the existing record and either wait (if `processing`) or return the cached response (if `completed`). This is handled entirely at the database level with no application-level locking.
+ 
+### Scenario C — Crash after debit, before credit
+The transaction status stays `pending` and the idempotency key stays `processing`. A recovery worker detects stale `processing` records older than 30 seconds and reverses the debit, restoring the sender's balance. The ledger is rebalanced and the transaction is marked `reversed`.
+ 
+### Scenario D — Key expires after 24 hours
+The `expires_at` column is set to `NOW() + 24 hours` on insert. A nightly cleanup job removes expired keys. If a client retries at 30 hours, the key no longer exists and the system returns `410 Gone: "Idempotency key has expired. Please retry with a new key."` No new transaction is created automatically.
+ 
+### Scenario E — Same key, different payload
+On first insert, a SHA-256 hash of the request body is stored in `payload_hash`. On subsequent requests with the same key, the incoming body is hashed and compared. If they differ, the system returns `409 Conflict: "Idempotency key reuse with different payload detected."`
+ 
+---
+ 
+## 12. Atomic Transfer — SELECT FOR UPDATE
+ 
+The balance check and debit run inside a single PostgreSQL transaction using `SELECT FOR UPDATE`.
+ 
+**Why?**
+The NovaPay incident happened because the balance check and debit ran in two separate queries with no lock between them. Under concurrent load, multiple requests could all read the same balance, all pass the check, and all debit — resulting in a negative balance.
+ 
+`SELECT FOR UPDATE` locks the row for the duration of the transaction. No other transaction can read or write that row until the lock is released. The balance check and debit become a single atomic operation.
+ 
+```sql
+BEGIN;
+SELECT balance FROM accounts WHERE id = $1 FOR UPDATE;
+-- balance check happens here
+UPDATE accounts SET balance = balance - $1 WHERE id = $2;
+UPDATE accounts SET balance = balance + $1 WHERE id = $3;
+INSERT INTO ledger_entries ...
+COMMIT;
+```
+ 
+If the balance is insufficient, the transaction rolls back and no debit occurs.
+ 
+---
+ 
+## 13. Double-Entry Ledger — Invariant Enforcement
+ 
+Every money movement creates exactly two ledger entries inside a single database transaction — one debit and one credit. The invariant is:
+ 
+```sql
+SELECT SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END)
+FROM ledger_entries
+WHERE transaction_id = $1;
+-- Must always return 0
+```
+ 
+This query runs after every completed transaction. If it ever returns non-zero, a critical error is thrown and the transaction is rolled back. Non-zero means money has been created or destroyed inside the system.
+ 
+**The `accounts.balance` column is a cache.** The source of truth is always the ledger. A reconciliation function can verify that `accounts.balance` matches the sum of all ledger entries for that account at any point in time.
+ 
+**Why verify after every transaction?**
+Catching invariant violations at the moment they occur is far cheaper than discovering them during an audit. A violation found immediately can be rolled back. A violation found 24 hours later has already propagated through the system.
+ 
+---
+ 
+## 14. Ledger Service — Verify Endpoint
+ 
+`GET /api/ledger/verify/:transactionId` allows any user to verify the double-entry invariant for their own transaction.
+ 
+**Why expose this as an API?**
+This serves two purposes. First, it gives the reviewer a way to demonstrate the invariant check working in real time via Postman. Second, in production this endpoint would be used by the admin service and automated reconciliation jobs to detect corruption without direct database access.
+ 
+**Why is it accessible to users and not just admins?**
+A user should be able to verify that their own transaction was recorded correctly. They cannot access other users' transactions — the service checks `sender_user_id = userId` before running the invariant query.
+ 
+---
+ 
+## 15. Route Order — Static Before Dynamic
+ 
+Express matches routes in the order they are defined. A static route like `/history` must be defined before a dynamic route like `/:id`, otherwise Express treats the word "history" as a UUID parameter and passes it to the wrong handler.
+ 
+```typescript
+// ❌ Wrong order — "history" treated as :id
+router.get('/:id', getTransaction);
+router.get('/history', getTransactionHistory);
+ 
+// ✅ Correct order — static first
+router.get('/history', getTransactionHistory);
+router.get('/:id', getTransaction);
+```
+ 
+This same pattern is applied in the ledger routes where `/verify/:transactionId` is defined before `/:accountId`. 
 
 ---
 
