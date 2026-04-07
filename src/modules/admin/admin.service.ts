@@ -1,25 +1,36 @@
 import { databasePool } from "../../database/connection";
-import { AdminUser, AuditLog, LedgerHealthResponse } from "./admin.type";
+import { AuditLog, LedgerHealthResult } from "./admin.type";
 
 export const getAllUsersService = async (
-  page: number,
-  limit: number,
-): Promise<{ data: AdminUser[]; total: number }> => {
+  page: number = 1,
+  limit: number = 10,
+) => {
   const offset = (page - 1) * limit;
-
-  const usersResult = await databasePool.query(
-    `SELECT id, email, role, created_at
+  const countResult = await databasePool.query(`SELECT COUNT(*) FROM users`);
+  const total = parseInt(countResult.rows[0].count, 10);
+  const totalPages = Math.ceil(total / limit);
+  const result = await databasePool.query(
+    `SELECT id, email, role, is_active, created_at, updated_at
      FROM users
-     ORDER BY created_at DESC
-     LIMIT $1 OFFSET $2`,
+     ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
 
-  const countResult = await databasePool.query(`SELECT COUNT(*) FROM users`);
-
   return {
-    data: usersResult.rows,
-    total: parseInt(countResult.rows[0].count),
+    users: result.rows.map((u) => ({
+      id: u.id,
+      email: u.email,
+      role: u.role,
+      isActive: u.is_active,
+      createdAt: u.created_at,
+      updatedAt: u.updated_at,
+    })),
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages,
+    },
   };
 };
 
@@ -28,24 +39,8 @@ export const getAuditLogsService = async (): Promise<AuditLog[]> => {
     `SELECT id, action, user_id, metadata, created_at
      FROM audit_logs
      ORDER BY created_at DESC
-     LIMIT 100`
+     LIMIT 100`,
   );
 
   return result.rows;
-};
-
-export const getLedgerHealthService = async (): Promise<LedgerHealthResponse> => {
-  const result = await databasePool.query(
-    `SELECT
-        transaction_id,
-        SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END) AS balance
-     FROM ledger_entries
-     GROUP BY transaction_id
-     HAVING SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END) != 0`
-  );
-
-  return {
-    isHealthy: result.rows.length === 0,
-    violations: result.rows,
-  };
 };

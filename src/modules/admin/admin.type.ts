@@ -2,23 +2,26 @@ export interface AdminUser {
   id: string;
   email: string;
   role: string;
+  isActive: boolean;
   created_at: Date;
 }
 
 export interface AuditLog {
   id: string;
+  userId: string;
   action: string;
-  user_id: string;
-  metadata: any;
+  entity: string;
+  entityId: string;
+  metadata: object;
+  ipAddress: string;
   created_at: Date;
 }
 
-export interface LedgerViolation {
-  transaction_id: string;
-  balance: string;
-}
-
-export interface LedgerHealthResponse {
+export interface LedgerHealthResult {
   isHealthy: boolean;
-  violations: LedgerViolation[];
+  totalTransactions: number;
+  violationCount: number;
+  violations: object[];
+  checkedAt: Date;
+  message: string;
 }
