@@ -12,3 +12,13 @@ export interface AuditLog {
   metadata: any;
   created_at: Date;
 }
+
+export interface LedgerViolation {
+  transaction_id: string;
+  balance: string;
+}
+
+export interface LedgerHealthResponse {
+  isHealthy: boolean;
+  violations: LedgerViolation[];
+}

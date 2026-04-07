@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { apiResponse, asyncHandler } from "../../utils";
-import { getAllUsersService, getAuditLogsService } from "./admin.service";
+import { getAllUsersService, getAuditLogsService, getLedgerHealthService } from "./admin.service";
 
 export const getAllUsers = asyncHandler(async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
@@ -21,4 +21,17 @@ export const getAuditLogs = asyncHandler(async (req: Request, res: Response) => 
   const logs = await getAuditLogsService();
 
   return apiResponse(res, 200, "Audit logs fetched successfully", logs);
+});
+
+export const getLedgerHealth = asyncHandler(async (req, res: Response) => {
+  const health = await getLedgerHealthService();
+
+  return apiResponse(
+    res,
+    200,
+    health.isHealthy
+      ? "Ledger is healthy"
+      : "Ledger invariant violation detected",
+    health
+  );
 });

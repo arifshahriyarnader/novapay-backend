@@ -1,5 +1,5 @@
 import { databasePool } from "../../database/connection";
-import { AdminUser, AuditLog } from "./admin.type";
+import { AdminUser, AuditLog, LedgerHealthResponse } from "./admin.type";
 
 export const getAllUsersService = async (
   page: number,
@@ -32,4 +32,20 @@ export const getAuditLogsService = async (): Promise<AuditLog[]> => {
   );
 
   return result.rows;
+};
+
+export const getLedgerHealthService = async (): Promise<LedgerHealthResponse> => {
+  const result = await databasePool.query(
+    `SELECT
+        transaction_id,
+        SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END) AS balance
+     FROM ledger_entries
+     GROUP BY transaction_id
+     HAVING SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END) != 0`
+  );
+
+  return {
+    isHealthy: result.rows.length === 0,
+    violations: result.rows,
+  };
 };
