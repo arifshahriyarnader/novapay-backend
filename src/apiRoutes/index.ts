@@ -4,6 +4,7 @@ import accountRoutes from '../modules/account/account.routes';
 import transactionRoutes from '../modules/transaction/transaction.routes';
 import ledgerRoutes from '../modules/ledger/ledger.routes';
 import fxRoutes from '../modules/fx/fx.routes';
+import transferRoutes from '../modules/fx/transfer.routes';
 
 
 const router = Router();
@@ -12,5 +13,6 @@ router.use('/accounts', accountRoutes)
 router.use('/transactions', transactionRoutes);
 router.use('/ledger', ledgerRoutes);
 router.use('/fx', fxRoutes)
+router.use('/transfers', transferRoutes)
 
 export default router;
