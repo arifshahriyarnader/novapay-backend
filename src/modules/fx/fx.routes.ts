@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { lockRate } from "./fx.controller";
+import { checkQuote, lockRate } from "./fx.controller";
 import { authenticate, authorize, validate } from "../../middleware";
 import { lockRateSchema } from "./fx.validator";
 
@@ -11,6 +11,13 @@ router.post(
   authorize("user", "employer"),
   validate(lockRateSchema),
   lockRate,
+);
+
+router.get(
+  "/quote/:id",
+  authenticate,
+  authorize("user", "employer"),
+  checkQuote,
 );
 
 export default router;
