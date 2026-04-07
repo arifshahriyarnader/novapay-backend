@@ -87,3 +87,110 @@ export const createPayrollJobService = async (
     createdAt: job.created_at,
   };
 };
+
+export const getPayrollJobService = async (jobId: string, userId: string) => {
+  const result = await databasePool.query(
+    `SELECT pj.*, a.user_id as employer_user_id
+     FROM payroll_jobs pj
+     JOIN accounts a ON a.id = pj.employer_account_id
+     WHERE pj.id = $1`,
+    [jobId],
+  );
+
+  const job = result.rows[0];
+
+  if (!job) throw new ApiError(404, "Payroll job not found");
+
+  if (job.employer_user_id !== userId) {
+    throw new ApiError(403, "You do not have access to this payroll job");
+  }
+
+  const progressPercent =
+    job.total_recipients > 0
+      ? Math.round(
+          ((job.processed_count + job.failed_count) / job.total_recipients) *
+            100,
+        )
+      : 0;
+
+  return {
+    jobId: job.id,
+    status: job.status,
+    totalAmount: job.total_amount,
+    totalRecipients: job.total_recipients,
+    processedCount: job.processed_count,
+    failedCount: job.failed_count,
+    pendingCount: job.total_recipients - job.processed_count - job.failed_count,
+    progressPercent,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+  };
+};
+
+export const getPayrollJobReportService = async (
+  jobId: string,
+  userId: string,
+) => {
+  const jobResult = await databasePool.query(
+    `SELECT pj.*, a.user_id as employer_user_id
+     FROM payroll_jobs pj
+     JOIN accounts a ON a.id = pj.employer_account_id
+     WHERE pj.id = $1`,
+    [jobId],
+  );
+
+  const job = jobResult.rows[0];
+
+  if (!job) throw new ApiError(404, "Payroll job not found");
+
+  if (job.employer_user_id !== userId) {
+    throw new ApiError(403, "You do not have access to this payroll job");
+  }
+
+  const itemsResult = await databasePool.query(
+    `SELECT pi.id, pi.receiver_account_id, pi.amount,
+            pi.status, pi.failure_reason, pi.idempotency_key,
+            pi.created_at, pi.updated_at
+     FROM payroll_items pi
+     WHERE pi.job_id = $1
+     ORDER BY pi.created_at ASC`,
+    [jobId],
+  );
+
+  const items = itemsResult.rows;
+  const completed = items.filter((i) => i.status === "completed");
+  const failed = items.filter((i) => i.status === "failed");
+  const pending = items.filter((i) => i.status === "pending");
+
+  return {
+    jobId: job.id,
+    status: job.status,
+    summary: {
+      totalRecipients: job.total_recipients,
+      totalAmount: job.total_amount,
+      processedCount: job.processed_count,
+      failedCount: job.failed_count,
+      pendingCount: pending.length,
+      successRate:
+        job.total_recipients > 0
+          ? `${Math.round((completed.length / job.total_recipients) * 100)}%`
+          : "0%",
+    },
+    completedPayments: completed.map((i) => ({
+      id: i.id,
+      receiverAccountId: i.receiver_account_id,
+      amount: i.amount,
+      status: i.status,
+      processedAt: i.updated_at,
+    })),
+    failedPayments: failed.map((i) => ({
+      id: i.id,
+      receiverAccountId: i.receiver_account_id,
+      amount: i.amount,
+      status: i.status,
+      failureReason: i.failure_reason,
+    })),
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+  };
+};
