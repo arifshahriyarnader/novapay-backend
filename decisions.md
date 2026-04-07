@@ -421,4 +421,30 @@ BullMQ requires Redis as its queue storage backend. Redis stores job metadata (s
  
 ---
 
-*More decisions will be added as each feature is implemented.*
+## 18. Admin Service
+
+The Admin Service provides an internal panel for operations, compliance, and incident response. All endpoints require `role: admin`.
+
+### Why admin-only?
+Admin endpoints expose sensitive system data — all users, all transactions, all payroll jobs, and ledger health. Exposing these to regular users or employers would violate data privacy and regulatory compliance requirements.
+
+### Ledger health endpoint
+`GET /api/admin/ledger/health` runs a full invariant check across all transactions:
+
+```sql
+SELECT transaction_id,
+  SUM(CASE WHEN type = 'credit' THEN amount ELSE -amount END) AS balance
+FROM ledger_entries
+GROUP BY transaction_id
+HAVING SUM(...) != 0
+```
+
+Any transaction where debits ≠ credits is a violation. A nonzero violation count means money has been created or destroyed inside the system. This endpoint returns `500` when violations are detected — a nonzero count is a critical data integrity event requiring immediate investigation.
+
+### Why audit logs are read-only
+Audit logs are never deleted or modified. They are an immutable trail of system actions. The admin can read them but not alter them — this is a compliance requirement.
+
+### Why no pagination yet
+Endpoints return the latest 100 records with `LIMIT 100`. Full pagination with cursor-based navigation would be added before production. Under assessment time constraints, 100 records is sufficient to demonstrate the functionality.
+
+
