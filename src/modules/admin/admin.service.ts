@@ -42,9 +42,9 @@ export const getAuditLogsService = async () => {
      FROM audit_logs al
      LEFT JOIN users u ON u.id = al.user_id
      ORDER BY al.created_at DESC
-     LIMIT 100`
+     LIMIT 100`,
   );
- 
+
   return result.rows.map((log) => ({
     id: log.id,
     userId: log.user_id,
@@ -55,5 +55,38 @@ export const getAuditLogsService = async () => {
     metadata: log.metadata,
     ipAddress: log.ip_address,
     createdAt: log.created_at,
+  }));
+};
+
+export const getAllTransactionsService = async () => {
+  const result = await databasePool.query(
+    `SELECT t.id, t.amount, t.currency, t.status, t.type,
+            t.sender_account_id, t.receiver_account_id,
+            t.idempotency_key, t.fx_quote_id,
+            t.failure_reason, t.created_at, t.updated_at,
+            sender.user_id as sender_user_id,
+            receiver.user_id as receiver_user_id
+     FROM transactions t
+     JOIN accounts sender ON sender.id = t.sender_account_id
+     JOIN accounts receiver ON receiver.id = t.receiver_account_id
+     ORDER BY t.created_at DESC
+     LIMIT 100`,
+  );
+
+  return result.rows.map((t) => ({
+    id: t.id,
+    amount: t.amount,
+    currency: t.currency,
+    status: t.status,
+    type: t.type,
+    senderAccountId: t.sender_account_id,
+    receiverAccountId: t.receiver_account_id,
+    senderUserId: t.sender_user_id,
+    receiverUserId: t.receiver_user_id,
+    idempotencyKey: t.idempotency_key,
+    fxQuoteId: t.fx_quote_id,
+    failureReason: t.failure_reason,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
   }));
 };

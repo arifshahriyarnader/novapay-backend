@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { apiResponse, asyncHandler } from "../../utils";
-import { getAllUsersService, getAuditLogsService } from "./admin.service";
+import {
+  getAllTransactionsService,
+  getAllUsersService,
+  getAuditLogsService,
+} from "./admin.service";
 import { AuthRequest } from "../../middleware";
 
 export const getAllUsers = asyncHandler(
@@ -16,5 +20,12 @@ export const getAuditLogs = asyncHandler(
   async (_req: AuthRequest, res: Response) => {
     const logs = await getAuditLogsService();
     return apiResponse(res, 200, "Audit logs fetched successfully", logs);
+  },
+);
+
+export const getAllTransactions = asyncHandler(
+  async (_req: AuthRequest, res: Response) => {
+    const result = await getAllTransactionsService();
+    return apiResponse(res, 200, "Transactions fetched successfully", result);
   },
 );
