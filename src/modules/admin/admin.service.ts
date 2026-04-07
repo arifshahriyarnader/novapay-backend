@@ -131,3 +131,41 @@ export const getLedgerHealthService = async () => {
       : `🚨 CRITICAL: ${violations.length} invariant violation(s) detected — money has been created or destroyed`,
   };
 };
+
+export const getAllPayrollJobsService = async () => {
+  const result = await databasePool.query(
+    `SELECT pj.id, pj.total_amount, pj.total_recipients,
+            pj.processed_count, pj.failed_count, pj.status,
+            pj.created_at, pj.updated_at,
+            a.user_id as employer_user_id,
+            u.email as employer_email
+     FROM payroll_jobs pj
+     JOIN accounts a ON a.id = pj.employer_account_id
+     JOIN users u ON u.id = a.user_id
+     ORDER BY pj.created_at DESC`
+  );
+ 
+  return result.rows.map((job) => ({
+    id: job.id,
+    employerUserId: job.employer_user_id,
+    employerEmail: job.employer_email,
+    totalAmount: job.total_amount,
+    totalRecipients: job.total_recipients,
+    processedCount: job.processed_count,
+    failedCount: job.failed_count,
+    pendingCount:
+      job.total_recipients - job.processed_count - job.failed_count,
+    progressPercent:
+      job.total_recipients > 0
+        ? Math.round(
+            ((job.processed_count + job.failed_count) /
+              job.total_recipients) *
+              100
+          )
+        : 0,
+    status: job.status,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+  }));
+};
+ 

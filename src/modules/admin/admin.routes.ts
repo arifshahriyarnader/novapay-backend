@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../../middleware";
 import {
+  getAllPayrollJobs,
   getAllTransactions,
   getAllUsers,
   getAuditLogs,
@@ -21,4 +22,11 @@ router.get(
 );
 
 router.get("/ledger/health", authenticate, authorize("admin"), getLedgerHealth);
+
+router.get(
+  "/payroll/jobs",
+  authenticate,
+  authorize("admin"),
+  getAllPayrollJobs,
+);
 export default router;

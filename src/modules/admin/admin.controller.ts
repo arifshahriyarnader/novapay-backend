@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { apiResponse, asyncHandler } from "../../utils";
 import {
+  getAllPayrollJobsService,
   getAllTransactionsService,
   getAllUsersService,
   getAuditLogsService,
@@ -40,5 +41,12 @@ export const getLedgerHealth = asyncHandler(
       result.message,
       result,
     );
+  },
+);
+
+export const getAllPayrollJobs = asyncHandler(
+  async (_req: AuthRequest, res: Response) => {
+    const result = await getAllPayrollJobsService();
+    return apiResponse(res, 200, "Payroll jobs fetched successfully", result);
   },
 );
