@@ -34,13 +34,26 @@ export const getAllUsersService = async (
   };
 };
 
-export const getAuditLogsService = async (): Promise<AuditLog[]> => {
+export const getAuditLogsService = async () => {
   const result = await databasePool.query(
-    `SELECT id, action, user_id, metadata, created_at
-     FROM audit_logs
-     ORDER BY created_at DESC
-     LIMIT 100`,
+    `SELECT al.id, al.user_id, al.action, al.entity,
+            al.entity_id, al.metadata, al.ip_address, al.created_at,
+            u.email as user_email
+     FROM audit_logs al
+     LEFT JOIN users u ON u.id = al.user_id
+     ORDER BY al.created_at DESC
+     LIMIT 100`
   );
-
-  return result.rows;
+ 
+  return result.rows.map((log) => ({
+    id: log.id,
+    userId: log.user_id,
+    userEmail: log.user_email,
+    action: log.action,
+    entity: log.entity,
+    entityId: log.entity_id,
+    metadata: log.metadata,
+    ipAddress: log.ip_address,
+    createdAt: log.created_at,
+  }));
 };

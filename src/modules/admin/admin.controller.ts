@@ -13,9 +13,8 @@ export const getAllUsers = asyncHandler(
 );
 
 export const getAuditLogs = asyncHandler(
-  async (req: Request, res: Response) => {
+  async (_req: AuthRequest, res: Response) => {
     const logs = await getAuditLogsService();
-
     return apiResponse(res, 200, "Audit logs fetched successfully", logs);
   },
 );
