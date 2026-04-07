@@ -332,11 +332,11 @@ A user should be able to verify that their own transaction was recorded correctl
 Express matches routes in the order they are defined. A static route like `/history` must be defined before a dynamic route like `/:id`, otherwise Express treats the word "history" as a UUID parameter and passes it to the wrong handler.
  
 ```typescript
-// ❌ Wrong order — "history" treated as :id
+//  Wrong order — "history" treated as :id
 router.get('/:id', getTransaction);
 router.get('/history', getTransactionHistory);
  
-// ✅ Correct order — static first
+//  Correct order — static first
 router.get('/history', getTransactionHistory);
 router.get('/:id', getTransaction);
 ```
